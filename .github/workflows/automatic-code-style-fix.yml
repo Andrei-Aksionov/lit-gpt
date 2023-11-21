@@ -26,8 +26,8 @@ jobs:
 
       # Push changes if there are any
       - name: Pushing changes 🛠 ️
-        uses: actions-js/push@v1.4
+        uses: ad-m/github-push-action@master
         with:
-          message: "Automatic code-style fixes."
+          # message: "Automatic code-style fixes."
           branch: ${{ github.head_ref || github.ref_name }}
           github_token: ${{ secrets.github-token || github.token }}
