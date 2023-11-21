@@ -1,0 +1,51 @@
+name: Automatic Code Styling
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  auto_code_style_fixes:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout 🛎️
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          token: ${{ secrets.github-token || github.token }}
+
+      # Black
+      - name: Black
+        id: black
+        uses: psf/black@stable
+        with:
+          options: "-l120 -C --target-version py38 chat eval finetune generate lit_gpt notebooks pretrain quantize scripts tests xla"
+          jupyter: true
+
+      # Ruff
+      - name: Ruff
+        uses: chartboost/ruff-action@v1
+        with:
+          args: --select E,W,F,S --extend-select C4,SIM,RET,PT,I001,ANN001,ANN201,ANN205,ANN206,ARG001 --ignore E501,E731,S108,S101,S113,S603,PT007,S310,E402,PT004,C408 --per-file-ignores "*/**/__init__.py":I001,"tests/*":ANN --line-length 120 --target-version py38 --fix-only
+
+      - name: Fixing Pull Request ↩️
+        # if: always() && inputs.push-fixes == true && steps.black.outcome == 'failure'
+        # if: always() && inputs.push-fixes == true
+        uses: actions-js/push@v1.4
+        with:
+          github_token: ${{ secrets.github-token || github.token }}
+          message: "pre-commit: running and fixing..."
+          branch: ${{ github.head_ref || github.ref_name }}
+      # # Push changes
+      # # - name: Commit & Push changes
+      # #   uses: actions-js/push@master
+      # #   with:
+      # #     github_token: ${{ secrets.GITHUB_TOKEN }}
+      # # Push changes
+      # - name: Commit & Push changes
+      #   uses: actions-js/push@master
+      #   with:
+      #     message: Pushing changes
+      #     branch: ${{ github.ref_name }}
+      #     github_token: ${{ secrets.GITHUB_TOKEN }}
