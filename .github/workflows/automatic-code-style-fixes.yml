@@ -13,7 +13,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
-          token: ${{ secrets.github-token || github.token }}# Black
+          token: ${{ secrets.github-token || github.token }}
 
       # Black
       - name: Black
