@@ -24,7 +24,8 @@ jobs:
           jupyter: true
 
       - name: Fixing Pull Request ↩️
-        if: always() && inputs.push-fixes == true && steps.black.outcome == 'failure'
+        # if: always() && inputs.push-fixes == true && steps.black.outcome == 'failure'
+        # if: always() && inputs.push-fixes == true
         uses: actions-js/push@v1.4
         with:
           github_token: ${{ secrets.github-token || github.token }}
