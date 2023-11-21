@@ -30,3 +30,10 @@ jobs:
       #   uses: actions-js/push@master
       #   with:
       #     github_token: ${{ secrets.GITHUB_TOKEN }}
+      Push changes
+      - name: Commit & Push changes
+        uses: actions-js/push@master
+        with:
+          message: Pushing changes
+          branch: ${{ github.ref_name }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
