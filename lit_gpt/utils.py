@@ -1,26 +1,17 @@
 """Utility functions for training and inference."""
 import math
-
 import pickle
 import sys
-
 from contextlib import nullcontext
-
 from io import BytesIO
-
 from pathlib import Path
-
 from typing import TYPE_CHECKING, ContextManager, Dict, List, Mapping, Optional, TypeVar, Union
 
 import lightning as L
 import torch
-
 import torch.nn as nn
-
 import torch.utils._device
-
 from lightning.fabric.strategies import FSDPStrategy
-
 from lightning.fabric.utilities.load import _lazy_load as lazy_load
 from torch.serialization import normalize_storage_type
 
