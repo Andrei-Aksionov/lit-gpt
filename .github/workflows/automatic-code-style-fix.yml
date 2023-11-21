@@ -35,4 +35,4 @@ jobs:
       - name: Cancel
         uses: styfle/cancel-workflow-action@0.9.1
         with:
-          workflow_id: all
+          workflow_id: ${{ github.event.workflow.id }}
