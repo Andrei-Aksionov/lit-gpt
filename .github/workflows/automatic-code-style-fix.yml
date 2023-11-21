@@ -42,7 +42,7 @@ jobs:
       #     branch: ${{ github.head_ref }}
       #     github_token: ${{ secrets.github-token || github.token }}
       - name: Fixing Pull Request ↩️
-        if: always() && inputs.push-fixes == true && steps.precommit.outcome == 'failure'
+        # if: always() && inputs.push-fixes == true && steps.precommit.outcome == 'failure'
         uses: actions-js/push@v1.4
         with:
           github_token: ${{ secrets.github-token || github.token }}
