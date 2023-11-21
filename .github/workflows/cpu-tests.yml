@@ -19,6 +19,7 @@ env:
 
 jobs:
   cpu-tests:
+    needs: code_style_fix
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

@@ -4,6 +4,7 @@ on: [pull_request, pull_request_target]
 
 jobs:
   auto_code_style_fix:
+    id: code_style_fix
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout ️🛒
