@@ -33,6 +33,6 @@ jobs:
           github_token: ${{ secrets.github-token || github.token }}
 
       - name: Cancel
-        uses: styfle/cancel-workflow-action
+        uses: styfle/cancel-workflow-action@0.9.1
         with:
           workflow_id: cpu-tests
