@@ -1,7 +1,7 @@
 """Utility functions for training and inference."""
 import math
-import pickle
 import sys
+import pickle
 from contextlib import nullcontext
 from io import BytesIO
 from pathlib import Path
@@ -10,8 +10,10 @@ from typing import TYPE_CHECKING, ContextManager, Dict, List, Mapping, Optional,
 import lightning as L
 import torch
 import torch.nn as nn
+
 import torch.utils._device
 from lightning.fabric.strategies import FSDPStrategy
+
 from lightning.fabric.utilities.load import _lazy_load as lazy_load
 from torch.serialization import normalize_storage_type
 
@@ -57,9 +59,8 @@ def check_valid_checkpoint_dir(checkpoint_dir: Path) -> None:
     files = {
         "lit_model.pth": (checkpoint_dir / "lit_model.pth").is_file(),
         "lit_config.json": (checkpoint_dir / "lit_config.json").is_file(),
-        "tokenizer.json OR tokenizer.model": (checkpoint_dir / "tokenizer.json").is_file() or (
-            checkpoint_dir / "tokenizer.model"
-        ).is_file(),
+        "tokenizer.json OR tokenizer.model": (checkpoint_dir / "tokenizer.json").is_file()
+        or (checkpoint_dir / "tokenizer.model").is_file(),
         "tokenizer_config.json": (checkpoint_dir / "tokenizer_config.json").is_file(),
     }
     if checkpoint_dir.is_dir():
