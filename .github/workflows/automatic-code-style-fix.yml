@@ -6,11 +6,18 @@ jobs:
   auto_code_style_fix:
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout ️🛒
+      # - name: Checkout ️🛒
+      #   uses: actions/checkout@v4
+      #   with:
+      #     ref: ${{ github.head_ref }}
+      #     fetch-depth: 0
+
+      - name: Checkout 🛎️
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
           fetch-depth: 0
+          submodules: recursive
+          token: ${{ secrets.github-token || github.token }}
 
       - name: Black ◼️
         uses: psf/black@stable
@@ -23,14 +30,21 @@ jobs:
         with:
           args: --select E,W,F,S --extend-select C4,SIM,RET,PT,I001,ANN001,ANN201,ANN205,ANN206,ARG001 --ignore E501,E731,S108,S101,S113,S603,PT007,S310,E402,PT004,C408 --per-file-ignores "*/**/__init__.py":I001,"tests/*":ANN --line-length 120 --target-version py38 --fix-only
 
-      - name: Commit files ✔️
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git diff-index --quiet HEAD || git commit -a -m "Automatic code-style fix."
+      # - name: Commit files ✔️
+      #   run: |
+      #     git config --local user.email "github-actions[bot]@users.noreply.github.com"
+      #     git config --local user.name "github-actions[bot]"
+      #     git diff-index --quiet HEAD || git commit -a -m "Automatic code-style fix."
 
-      - name: Pushing changes 🛠 ️
-        uses: ad-m/github-push-action@master
+      # - name: Pushing changes 🛠 ️
+      #   uses: ad-m/github-push-action@master
+      #   with:
+      #     branch: ${{ github.head_ref }}
+      #     github_token: ${{ secrets.github-token || github.token }}
+      - name: Fixing Pull Request ↩️
+        if: always() && inputs.push-fixes == true && steps.precommit.outcome == 'failure'
+        uses: actions-js/push@v1.4
         with:
-          branch: ${{ github.head_ref }}
           github_token: ${{ secrets.github-token || github.token }}
+          message: "pre-commit: running and fixing..."
+          branch: ${{ github.ref_name }}
