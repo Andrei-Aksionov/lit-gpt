@@ -11,6 +11,8 @@ on:
         type: boolean
         required: false
         default: false
+  pull_request:
+    branches: [main]
 
 jobs:
   auto_code_style_fixes:
