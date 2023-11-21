@@ -1,16 +1,6 @@
 name: Automatic Code Styling
 
 on:
-  workflow_call:
-    secrets:
-      github-token:
-        description: "if provided an user GH's token, it will push update; requires `push` event"
-        required: false
-      push-fixes:
-        description: "if provided an user GH's token, it will push update; requires `push` event"
-        type: boolean
-        required: false
-        default: false
   pull_request:
     branches: [main]
 
