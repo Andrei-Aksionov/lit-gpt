@@ -30,7 +30,7 @@ jobs:
         with:
           github_token: ${{ secrets.github-token || github.token }}
           message: "pre-commit: running and fixing..."
-          branch: ${{ github.ref_name }}
+          branch: ${{ github.head_ref || github.ref_name }}
 
       # # Ruff
       # - name: Ruff
