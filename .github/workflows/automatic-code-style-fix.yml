@@ -9,11 +9,10 @@ jobs:
 
       - name: Checkout ️🛒
         # uses: actions/checkout@v4
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
-          persist-credentials: false
-          # ref: ${{ github.head_ref }}
 
       - name: Black ◼️
         uses: psf/black@stable
