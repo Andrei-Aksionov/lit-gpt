@@ -25,7 +25,7 @@ jobs:
 
       - name: Black output
         run: |
-          echo ${{join(steps.black.outputs.*, '\n')}}
+          echo ${{ steps.black.outputs.stdout }}
 
       # Ruff
       - name: Ruff
@@ -36,7 +36,7 @@ jobs:
 
       - name: Ruff output
         run: |
-          echo ${{join(steps.ruff.outputs.*, '\n')}}
+          echo ${{ steps.ruff.outputs.stdout }}
 
       - name: Fixing Pull Request ↩️
         # if: always() && inputs.push-fixes == true && steps.black.outcome == 'failure'
