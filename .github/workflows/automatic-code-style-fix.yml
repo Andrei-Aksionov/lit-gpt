@@ -28,5 +28,5 @@ jobs:
         uses: actions-js/push@v1.4
         with:
           message: "Automatic code-style fixes."
-          branch: ${{ github.ref_name }}
+          branch: ${{ github.head_ref || github.ref_name }}
           github_token: ${{ secrets.github-token || github.token }}
