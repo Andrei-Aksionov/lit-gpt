@@ -8,10 +8,12 @@ jobs:
     steps:
 
       - name: Checkout ️🛒
-        uses: actions/checkout@v4
+        # uses: actions/checkout@v4
+        uses: actions/checkout@v2
         with:
           fetch-depth: 0
-          ref: ${{ github.head_ref }}
+          persist-credentials: false
+          # ref: ${{ github.head_ref }}
 
       - name: Black ◼️
         uses: psf/black@stable
@@ -25,11 +27,14 @@ jobs:
           args: --select E,W,F,S --extend-select C4,SIM,RET,PT,I001,ANN001,ANN201,ANN205,ANN206,ARG001 --ignore E501,E731,S108,S101,S113,S603,PT007,S310,E402,PT004,C408 --per-file-ignores "*/**/__init__.py":I001,"tests/*":ANN --line-length 120 --target-version py38 --fix-only
 
       # Push changes if there are any
-      - name: Pushing changes 🛠 ️
-        uses: actions-js/push@v1.4
+      # - name: Pushing changes 🛠 ️
+      #   uses: actions-js/push@v1.4
+      #   with:
+      #     message: "Automatic code-style fixes."
+      #     branch: ${{ github.head_ref || github.ref_name }}
+      #     github_token: ${{ secrets.github-token || github.token }}
+      - name: Push changes
+        uses: ad-m/github-push-action@master
         with:
-          message: "Automatic code-style fixes."
-          branch: ${{ github.head_ref || github.ref_name }}
-          github_token: ${{ secrets.github-token || github.token }}
-          amend: true
-          force: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
