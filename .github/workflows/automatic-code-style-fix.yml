@@ -31,3 +31,5 @@ jobs:
           message: "Automatic code-style fixes."
           branch: ${{ github.head_ref || github.ref_name }}
           github_token: ${{ secrets.github-token || github.token }}
+          amend: true
+          force: true
