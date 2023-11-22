@@ -2,6 +2,9 @@ name: Automatic Code Style Fix
 
 on: [pull_request, pull_request_target]
 
+permissions:
+  actions: write
+
 jobs:
   auto_code_style_fix:
     runs-on: ubuntu-22.04
@@ -42,5 +45,3 @@ jobs:
           github_token: ${{ secrets.github-token || github.token }}
           message: "Automated code-style fix."
           branch: ${{ github.head_ref || github.ref_name }}
-          permissions:
-            actions: write
