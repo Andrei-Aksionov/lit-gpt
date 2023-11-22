@@ -26,16 +26,15 @@ jobs:
 
       - name: Commit files ✔️
         run: |
+          git config --local user.name "$(git log -n 1 --pretty=format:%an)"
+          git config --local user.email "$(git log -n 1 --pretty=format:%ae)"
           git diff-index --quiet HEAD || git commit -a -m "Automatic code-style fix."
 
-      # git config --local user.email "github-actions[bot]@users.noreply.github.com"
-      # git config --local user.name "github-actions[bot]"
-
-      # - name: Pushing changes 🛠 ️
-      #   uses: ad-m/github-push-action@master
-      #   with:
-      #     branch: ${{ github.head_ref }}
-      #     github_token: ${{ secrets.github-token || github.token }}
+      - name: Pushing changes 🛠 ️
+        uses: ad-m/github-push-action@master
+        with:
+          branch: ${{ github.head_ref }}
+          github_token: ${{ secrets.github-token || github.token }}
 
       # - name: Fixing Pull Request ↩️
       #   # if: always() && inputs.push-fixes == true && steps.precommit.outcome == 'failure'
