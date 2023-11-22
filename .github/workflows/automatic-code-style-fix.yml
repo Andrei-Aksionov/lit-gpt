@@ -41,4 +41,4 @@ jobs:
         with:
           github_token: ${{ secrets.github-token || github.token }}
           message: "Automated code-style fix."
-          branch: ${{ github.ref_name }}
+          branch: ${{ github.head_ref || github.ref_name }}
