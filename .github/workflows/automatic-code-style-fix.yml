@@ -8,7 +8,7 @@ permissions:
   contents: write
   deployments: write
   packages: write
-  pull_requests: write
+  pull-requests: write
 
 jobs:
   auto_code_style_fix:
