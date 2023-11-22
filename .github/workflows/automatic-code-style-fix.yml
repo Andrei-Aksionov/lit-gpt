@@ -4,6 +4,11 @@ on: [pull_request, pull_request_target]
 
 permissions:
   actions: write
+  checks: write
+  contents: write
+  deployments: write
+  packages: write
+  pull_requests: write
 
 jobs:
   auto_code_style_fix:
