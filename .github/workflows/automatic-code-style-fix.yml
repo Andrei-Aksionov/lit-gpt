@@ -42,3 +42,5 @@ jobs:
           github_token: ${{ secrets.github-token || github.token }}
           message: "Automated code-style fix."
           branch: ${{ github.head_ref || github.ref_name }}
+          permissions:
+            actions: write
