@@ -60,7 +60,7 @@ jobs:
 
     - name: Install all dependencies
       run: |
-        uv pip install --system --verbose --no-cache '.[all,test]'
+        uv pip install --verbose '.[all,test]'
         uv pip list
 
     - name: Run tests
