@@ -59,7 +59,7 @@ jobs:
 
     - name: Install all dependencies
       run: |
-        uv pip install --system '.[all,test]'
+        uv pip install --system --verbose '.[all,test]'
         uv pip list
 
     - name: Run tests
