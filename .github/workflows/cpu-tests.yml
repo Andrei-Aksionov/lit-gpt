@@ -47,7 +47,7 @@ jobs:
 
     - name: Install minimal dependencies
       run: |
-        uv pip install --system . --verbose --no-cache
+        uv pip install --system .
         uv pip list
         # make sure all modules are still importable with only the minimal dependencies available
         modules=$(
@@ -60,7 +60,7 @@ jobs:
 
     - name: Install all dependencies
       run: |
-        uv pip install --verbose '.[all,test]'
+        uv pip install --system '.[all,test]'
         uv pip list
 
     - name: Run tests
