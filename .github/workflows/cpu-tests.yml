@@ -31,8 +31,8 @@ jobs:
           - {os: "ubuntu-22.04", python-version: "3.9"}
           # - {os: "ubuntu-20.04", python-version: "3.8"}
           # - {os: "windows-2022", python-version: "3.10"}
-    timeout-minutes: 25
-    # timeout-minutes: 5
+    # timeout-minutes: 25
+    timeout-minutes: 5
 
     steps:
     - uses: actions/checkout@v4
