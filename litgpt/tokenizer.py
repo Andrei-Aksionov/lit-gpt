@@ -72,7 +72,7 @@ class Tokenizer:
         if not (tokenizer_config_path := checkpoint_dir / "tokenizer_config.json").is_file():
             return False
         with open(tokenizer_config_path) as fp:
-            config = json.load(fp)
+            config = json.load(fp, encoding="utf-8")
         if any(config.get(check, False) for check in ("add_bos_token", "add_prefix_space")):
             return True
         # for examples that also use the Llama tokenizer, but do not have or set add_bos_token to True.
