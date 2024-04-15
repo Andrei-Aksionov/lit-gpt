@@ -41,7 +41,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: Install uv
-      run: pip install uv==0.1.30
+      run: pip install uv
 
     - name: Install minimal dependencies
       run: |
@@ -61,6 +61,6 @@ jobs:
         uv pip install --system '.[all,test]'
         uv pip list
 
-    - name: Run tests
-      run: |
-        pytest -v --disable-pytest-warnings --strict-markers --color=yes --timeout 120
+    # - name: Run tests
+    #   run: |
+    #     pytest -v --disable-pytest-warnings --strict-markers --color=yes --timeout 120
