@@ -45,7 +45,7 @@ jobs:
 
     - name: Install minimal dependencies
       run: |
-        uv pip install --system . --verbose
+        uv pip install --system -e .
         uv pip list
         # make sure all modules are still importable with only the minimal dependencies available
         modules=$(
@@ -58,9 +58,9 @@ jobs:
 
     - name: Install all dependencies
       run: |
-        uv pip install --system '.[all,test]' --verbose
+        uv pip install --system -e '.[all,test]'
         uv pip list
 
-    # - name: Run tests
-    #   run: |
-    #     pytest -v --disable-pytest-warnings --strict-markers --color=yes --timeout 120
+    - name: Run tests
+      run: |
+        pytest -v --disable-pytest-warnings --strict-markers --color=yes --timeout 120
