@@ -43,7 +43,7 @@ jobs:
 
     - name: Install minimal dependencies
       run: |
-        uv pip install .
+        uv pip install --system .
         uv pip list
         # make sure all modules are still importable with only the minimal dependencies available
         modules=$(
