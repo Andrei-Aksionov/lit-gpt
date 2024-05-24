@@ -219,7 +219,12 @@ Time for inference: 1.26 sec total, 27.81 tokens/sec, 35 tokens
 
 >> Prompt: 
 ```
+&nbsp;
 
+> [!TIP]
+> Use `--multiline true` to support prompts that require multiple input lines.
+
+<br>
 
 &nbsp;
 **More information and additional resources**
@@ -462,6 +467,44 @@ litgpt evaluate \
 ```
 
 (A list of supported tasks can be found [here](https://github.com/EleutherAI/lm-evaluation-harness/blob/master/docs/task_table.md).)
+
+
+&nbsp;
+## Deploy LLMs
+
+You can deploy LitGPT LLMs using your tool of choice. Below is an example using LitGPT built-in serving capabilities:
+
+
+```bash
+# 1) Download a pretrained model (alternatively, use your own finetuned model)
+litgpt download --repo_id microsoft/phi-2
+
+# 2) Start the server
+litgpt serve --checkpoint_dir checkpoints/microsoft/phi-2
+```
+
+```python
+# 3) Use the server (in a separate session)
+import requests, json
+ response = requests.post(
+     "http://127.0.0.1:8000/predict", 
+     json={"prompt": "Fix typos in the following sentence: Exampel input"}
+)
+print(response.json()["output"])
+```
+
+This prints:
+
+```
+Instruct: Fix typos in the following sentence: Exampel input
+Output: Example input.
+```
+
+
+&nbsp;
+**More information and additional resources**
+
+- [tutorials/deploy](deploy.md): A full deployment tutorial and example
 
 
 &nbsp;

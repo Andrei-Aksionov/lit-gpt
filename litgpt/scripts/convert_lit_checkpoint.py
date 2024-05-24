@@ -10,7 +10,7 @@ from lightning.fabric.utilities.load import _NotYetLoadedTensor as NotYetLoadedT
 
 from litgpt import Config
 from litgpt.scripts.convert_hf_checkpoint import layer_template, load_param
-from litgpt.utils import CLI, incremental_save, lazy_load
+from litgpt.utils import incremental_save, lazy_load
 
 
 def copy_weights_falcon(
@@ -235,7 +235,7 @@ def check_conversion_supported(lit_weights: Dict[str, torch.Tensor]) -> None:
     if any("lora" in wn for wn in lit_weights):
         raise ValueError("Checkpoints with LoRA weights cannot be converted. Call `scripts/merge_lora.py` first.")
     if any("adapter" in wn or "gating_factor" in wn for wn in lit_weights):
-        raise NotImplementedError("Converting adapter models is supported.")
+        raise NotImplementedError("Converting adapter models is not supported.")
 
 
 @torch.inference_mode()
@@ -265,7 +265,3 @@ def convert_lit_checkpoint(checkpoint_dir: Path, output_dir: Path) -> None:
         copy_fn(sd, lit_weights, saver=saver)
         gc.collect()
         saver.save(sd)
-
-
-if __name__ == "__main__":
-    CLI(convert_lit_checkpoint)

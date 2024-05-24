@@ -23,7 +23,6 @@ from litgpt.prompts import save_prompt_style
 from litgpt.scripts.merge_lora import merge_lora
 from litgpt.tokenizer import Tokenizer
 from litgpt.utils import (
-    CLI,
     CycleIterator,
     check_valid_checkpoint_dir,
     choose_logger,
@@ -31,6 +30,9 @@ from litgpt.utils import (
     copy_config_files,
     get_default_supported_precision,
     load_checkpoint,
+    init_out_dir,
+    instantiate_torch_optimizer,
+    instantiate_bnb_optimizer,
     num_parameters,
     parse_devices,
     save_hyperparameters,
@@ -60,10 +62,10 @@ def setup(
         micro_batch_size=1,
         lr_warmup_steps=100,
         epochs=5,
-        learning_rate=3e-4,
         max_seq_length=None,
     ),
     eval: EvalArgs = EvalArgs(interval=100, max_new_tokens=100, max_iters=100),
+    optimizer: Union[str, Dict] = "AdamW",
     logger_name: Literal["wandb", "tensorboard", "csv"] = "csv",
     seed: int = 1337,
 ) -> None:
@@ -71,7 +73,8 @@ def setup(
 
     Arguments:
         checkpoint_dir: The path to the base model's checkpoint directory to load for finetuning.
-        out_dir: Directory in which to save checkpoints and logs.
+        out_dir: Directory in which to save checkpoints and logs. If running in a Lightning Studio Job, look for it in
+            /teamspace/jobs/<job-name>/share.
         precision: The precision to use for finetuning. Possible choices: "bf16-true", "bf16-mixed", "32-true".
         quantize: If set, quantize the model with this algorithm. See ``tutorials/quantize.md`` for more information.
         devices: How many devices/GPUs to use.
@@ -87,6 +90,7 @@ def setup(
         data: Data-related arguments. If not provided, the default is ``litgpt.data.Alpaca``.
         train: Training-related arguments. See ``litgpt.args.TrainArgs`` for details.
         eval: Evaluation-related arguments. See ``litgpt.args.EvalArgs`` for details.
+        optimizer: An optimizer name (such as "AdamW") or config.
         logger_name: The name of the logger to send metrics to.
         seed: The random seed to use for reproducibility.
     """
@@ -94,6 +98,7 @@ def setup(
     pprint(locals())
     data = Alpaca() if data is None else data
     devices = parse_devices(devices)
+    out_dir = init_out_dir(out_dir)
 
     check_valid_checkpoint_dir(checkpoint_dir)
     config = Config.from_file(
@@ -137,7 +142,7 @@ def setup(
         strategy = "auto"
 
     fabric = L.Fabric(devices=devices, strategy=strategy, precision=precision, loggers=logger, plugins=plugins)
-    fabric.launch(main, devices, seed, config, data, checkpoint_dir, out_dir, train, eval)
+    fabric.launch(main, devices, seed, config, data, checkpoint_dir, out_dir, train, eval, optimizer)
 
 
 def main(
@@ -150,6 +155,7 @@ def main(
     out_dir: Path,
     train: TrainArgs,
     eval: EvalArgs,
+    optimizer: Union[str, Dict],
 ) -> None:
     validate_args(train, eval)
 
@@ -173,16 +179,11 @@ def main(
 
     model = fabric.setup_module(model)
 
-    trainable_params = [p for p in model.parameters() if p.requires_grad]
     if isinstance(fabric.strategy.precision, BitsandbytesPrecision):
-        import bitsandbytes as bnb
-
-        optimizer_cls = bnb.optim.PagedAdamW
+        optimizer = instantiate_bnb_optimizer(optimizer, model.parameters())
     else:
-        optimizer_cls = torch.optim.AdamW
-    optimizer = optimizer_cls(
-        trainable_params, lr=train.learning_rate, weight_decay=train.weight_decay, betas=(train.beta1, train.beta2)
-    )
+        optimizer = instantiate_torch_optimizer(optimizer, model.parameters())
+
     optimizer = fabric.setup_optimizers(optimizer)
     scheduler = get_lr_scheduler(optimizer, warmup_steps=train.lr_warmup_steps, max_steps=lr_max_steps)
 
@@ -207,6 +208,12 @@ def main(
     fabric.print(f"Training time: {(time.perf_counter()-train_time):.2f}s")
     if fabric.device.type == "cuda":
         fabric.print(f"Memory used: {torch.cuda.max_memory_allocated() / 1e9:.02f} GB")
+
+    # Final evaluation
+    val_loss = validate(fabric, model, val_dataloader, dataclasses.replace(eval, max_iters=len(val_dataloader)))
+    metrics = {"val_loss": val_loss, "val_ppl": math.exp(val_loss)}
+    fabric.log_dict(metrics)
+    fabric.print(f"Final evaluation | val loss: {val_loss.item():.3f} | val ppl: {math.exp(val_loss):.3f}")
 
     # Save the final LoRA checkpoint at the end of training
     save_path = out_dir / "final" / "lit_model.pth.lora"
@@ -242,7 +249,12 @@ def fit(
         f" {model.max_seq_length} and context length is {model.config.block_size}"
     )
 
-    validate(fabric, model, val_dataloader, tokenizer, dataclasses.replace(eval, max_iters=2), data)  # sanity check
+    if eval.initial_validation:
+        val_loss = validate(fabric, model, val_dataloader, dataclasses.replace(eval, max_iters=len(val_dataloader)))
+        val_loss = f"{val_loss:.3f}"
+    else:
+        validate(fabric, model, val_dataloader, dataclasses.replace(eval, max_iters=2))  # sanity check
+        val_loss = "n/a"
 
     train_iterator = CycleIterator(train_dataloader)
     throughput = ThroughputMonitor(fabric, window_size=50)
@@ -254,7 +266,6 @@ def fit(
     iter_num = 0
     total_lengths = 0
     total_t0 = time.perf_counter()
-    val_loss = "n/a"
 
     while step_count < max_steps and train_iterator.epoch < train.epochs:
         iter_num += 1
@@ -309,7 +320,8 @@ def fit(
 
         if not is_accumulating and step_count % eval.interval == 0:
             t0 = time.perf_counter()
-            val_loss = validate(fabric, model, val_dataloader, tokenizer, eval, data)
+            val_loss = validate(fabric, model, val_dataloader, eval)
+            generate_example(fabric, model, tokenizer, eval, data)
             t1 = time.perf_counter() - t0
             fabric.print(f"iter {iter_num}: val loss {val_loss.item():.4f}, val time: {t1 * 1000:.2f} ms")
             metrics = {"val_loss": val_loss, "val_ppl": math.exp(val_loss)}
@@ -328,9 +340,7 @@ def fit(
 
 # FSDP has issues with `inference_mode`
 @torch.no_grad()
-def validate(
-    fabric: L.Fabric, model: GPT, val_dataloader: DataLoader, tokenizer: Tokenizer, eval: EvalArgs, data: DataModule
-) -> torch.Tensor:
+def validate(fabric: L.Fabric, model: GPT, val_dataloader: DataLoader, eval: EvalArgs) -> torch.Tensor:
     fabric.print("Validating ...")
     model.eval()
     losses = torch.zeros(min(len(val_dataloader), eval.max_iters))
@@ -343,11 +353,18 @@ def validate(
 
     val_loss = losses.mean()
 
-    # produce an example:
+    model.train()
+    return val_loss
+
+
+@torch.no_grad()
+def generate_example(fabric: L.Fabric, model: GPT, tokenizer: Tokenizer, eval: EvalArgs, data: DataModule):
     instruction = "Recommend a movie for me to watch during the weekend and explain the reason."
     fabric.print(instruction)
     prompt = data.prompt_style.apply(instruction)
     encoded = tokenizer.encode(prompt, device=fabric.device)
+    model.eval()
+
     with fabric.init_tensor():
         # do not set `max_seq_length=max_returned_token` because memory is not a concern here
         model.set_kv_cache(batch_size=1)
@@ -355,11 +372,9 @@ def validate(
         model, encoded, max_returned_tokens=len(encoded) + eval.max_new_tokens, temperature=0.8, eos_id=tokenizer.eos_id
     )
     model.clear_kv_cache()
+    model.train()
     output = tokenizer.decode(output)
     fabric.print(output)
-
-    model.train()
-    return val_loss
 
 
 def get_lr_scheduler(optimizer, warmup_steps: int, max_steps: int):
@@ -411,9 +426,3 @@ def validate_args(train: TrainArgs, eval: EvalArgs) -> None:
         issues.append(f"{__file__} requires either epochs or max_steps to be set. This is set in {train}")
     if issues:
         raise ValueError("\n".join(issues))
-
-
-if __name__ == "__main__":
-    torch.set_float32_matmul_precision("high")
-
-    CLI(setup)

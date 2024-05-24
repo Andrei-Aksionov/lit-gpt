@@ -11,11 +11,12 @@ import pytest
 import torch
 import torch.nn.functional as F
 import yaml
-from conftest import RunIf
+from tests.conftest import RunIf
 from lightning import Fabric
 from lightning.fabric.loggers import CSVLogger, TensorBoardLogger
 from lightning.fabric.plugins import BitsandbytesPrecision
 from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.cli import instantiate_class
 from lightning_utilities.core.imports import RequirementCache
 
 from litgpt import GPT
@@ -29,7 +30,11 @@ from litgpt.utils import (
     chunked_cross_entropy,
     copy_config_files,
     find_multiple,
+    get_argument_names,
     incremental_save,
+    init_out_dir,
+    instantiate_bnb_optimizer, 
+    instantiate_torch_optimizer,
     num_parameters,
     parse_devices,
     save_hyperparameters,
@@ -266,6 +271,7 @@ def _test_function2(out_dir: Path, foo: bool = False, bar: int = 1):
     "command",
     [
         "any.py",
+        "litgpt finetune",
         "litgpt finetune full",
         "litgpt finetune lora",
         "litgpt finetune adapter",
@@ -294,3 +300,53 @@ def test_choose_logger(tmp_path):
 
     with pytest.raises(ValueError, match="`--logger_name=foo` is not a valid option."):
         choose_logger("foo", out_dir=tmp_path, name="foo")
+
+
+def test_init_out_dir(tmp_path):
+    relative_path = Path("./out")
+    absolute_path = tmp_path / "out"
+    assert init_out_dir(relative_path) == relative_path
+    assert init_out_dir(absolute_path) == absolute_path
+
+    with mock.patch.dict(os.environ, {"LIGHTNING_ARTIFACTS_DIR": "prefix"}):
+        assert init_out_dir(relative_path) == Path("prefix") / relative_path
+        assert init_out_dir(absolute_path) == absolute_path
+
+
+@pytest.fixture
+def model_parameters():
+    return [torch.nn.Parameter(torch.randn(2, 2))]
+
+
+def test_instantiate_bnb_optimizer_with_str(model_parameters):
+    import bitsandbytes as bnb
+    with mock.patch("litgpt.utils.get_argument_names", return_value={"lr", "eps", "weight_decay"}):
+        optimizer = instantiate_bnb_optimizer("AdamW", model_parameters)
+        assert isinstance(optimizer, bnb.optim.adamw.PagedAdamW)
+
+
+def test_instantiate_bnb_optimizer_with_dict(model_parameters):
+    import bitsandbytes as bnb
+    optimizer_dict = {"class_path": "AdamW", "init_args": {"lr": 0.01}}
+    with mock.patch("litgpt.utils.get_argument_names", return_value={"lr", "eps", "weight_decay"}):
+        optimizer = instantiate_bnb_optimizer(optimizer_dict, model_parameters)
+        assert isinstance(optimizer, bnb.optim.adamw.PagedAdamW)
+        assert optimizer.param_groups[0]["lr"] == 0.01
+
+
+def test_instantiate_bnb_optimizer_with_invalid_str(model_parameters):
+    with pytest.raises(ValueError, match="only supports the AdamW"):
+        instantiate_bnb_optimizer("SGD", model_parameters)
+
+
+def test_instantiate_torch_optimizer_with_str(model_parameters):
+    optimizer = instantiate_torch_optimizer("Adam", model_parameters, lr=0.01)
+    assert isinstance(optimizer, torch.optim.Adam)
+    assert optimizer.param_groups[0]["lr"] == 0.01
+
+
+def test_instantiate_torch_optimizer_with_class(model_parameters):
+    optimizer = instantiate_torch_optimizer({"class_path": "torch.optim.Adam", "init_args": {"lr": 123}}, model_parameters, lr=0.02)
+    assert isinstance(optimizer, torch.optim.Adam)
+    # init args gets overridden
+    assert optimizer.param_groups[0]["lr"] == 0.02

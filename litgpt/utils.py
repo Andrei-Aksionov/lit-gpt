@@ -3,6 +3,7 @@
 """Utility functions for training and inference."""
 import inspect
 import math
+import os
 import pickle
 import shutil
 import sys
@@ -20,11 +21,18 @@ from lightning.fabric.loggers import CSVLogger, TensorBoardLogger
 from lightning.fabric.strategies import FSDPStrategy
 from lightning.fabric.utilities.load import _lazy_load as lazy_load
 from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.cli import instantiate_class
 from torch.serialization import normalize_storage_type
 from typing_extensions import Self
 
 if TYPE_CHECKING:
     from litgpt import GPT, Config
+
+
+def init_out_dir(out_dir: Path) -> Path:
+    if not out_dir.is_absolute() and "LIGHTNING_ARTIFACTS_DIR" in os.environ:
+        return Path(os.getenv("LIGHTNING_ARTIFACTS_DIR")) / out_dir
+    return out_dir
 
 
 def find_multiple(n: int, k: int) -> int:
@@ -265,7 +273,8 @@ def chunked_cross_entropy(
             for logit_chunk, target_chunk in zip(logit_chunks, target_chunks)
         ]
         non_masked_elems = (targets != ignore_index).sum()
-        return torch.cat(loss_chunks).sum() / max(1, non_masked_elems)
+        # See [non_masked_elems div note]
+        return torch.cat(loss_chunks).sum() / non_masked_elems.maximum(torch.ones_like(non_masked_elems))
 
     # no chunking at all
     logits = logits.reshape(-1, logits.size(-1))
@@ -281,7 +290,11 @@ def chunked_cross_entropy(
         for logit_chunk, target_chunk in zip(logit_chunks, target_chunks)
     ]
     non_masked_elems = (targets != ignore_index).sum()
-    return torch.cat(loss_chunks).sum() / max(1, non_masked_elems)
+    # [non_masked_elems div note]:
+    #   max(1, non_masked_elems) would be more ergonomic to avoid a division by zero. However that
+    #   results in a python int which is then passed back to torch division. By using the
+    #   `x.maximum(torch.ones_like(x))` pattern we avoid a cudaStreamSynchronize.
+    return torch.cat(loss_chunks).sum() / non_masked_elems.maximum(torch.ones_like(non_masked_elems))
 
 
 def map_old_state_dict_weights(state_dict: Dict, mapping: Mapping, prefix: str) -> Dict:
@@ -385,7 +398,7 @@ class CycleIterator:
 def copy_config_files(source_dir: Path, out_dir: Path) -> None:
     """Copies the specified configuration and tokenizer files into the output directory."""
 
-    config_files = ["generation_config.json", "model_config.yaml"]
+    config_files = ["config.json", "generation_config.json", "model_config.yaml"]
     tokenizer_files = ["tokenizer.json", "tokenizer.model", "tokenizer_config.json"]
 
     for file_name in config_files + tokenizer_files:
@@ -432,6 +445,7 @@ def save_hyperparameters(function: callable, checkpoint_dir: Path) -> None:
         ("finetune", "lora"),
         ("finetune", "adapter"),
         ("finetune", "adapter_v2"),
+        ("finetune",),
         ("pretrain",),
     ]
     for known_command in known_commands:
@@ -473,3 +487,34 @@ def choose_logger(
     if logger_name == "wandb":
         return WandbLogger(project=name, resume=resume, **kwargs)
     raise ValueError(f"`--logger_name={logger_name}` is not a valid option. Choose from 'csv', 'tensorboard', 'wandb'.")
+
+
+def get_argument_names(cls):
+    sig = inspect.signature(cls.__init__)
+    return {name for name, param in sig.parameters.items()
+            if param.kind in [inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY]}
+
+
+def instantiate_bnb_optimizer(optimizer, model_parameters):
+    if (isinstance(optimizer, str) and "AdamW" not in optimizer) or (isinstance(optimizer, dict) and "AdamW" not in optimizer.get("class_path", "")):
+        raise ValueError("The chosen quantization format only supports the AdamW optimizer.")
+
+    import bitsandbytes as bnb
+    if isinstance(optimizer, str):
+        optimizer = bnb.optim.PagedAdamW(model_parameters)
+    else:
+        optim_args = get_argument_names(bnb.optim.PagedAdamW)
+        allowed_kwargs = {key: optimizer["init_args"][key] for key in optim_args & optimizer["init_args"].keys()}
+        optimizer = bnb.optim.PagedAdamW(model_parameters, **allowed_kwargs)
+    return optimizer
+
+
+def instantiate_torch_optimizer(optimizer, model_parameters, **kwargs):
+    if isinstance(optimizer, str):
+        optimizer_cls = getattr(torch.optim, optimizer)
+        optimizer = optimizer_cls(model_parameters, **kwargs)
+    else:
+        optimizer = dict(optimizer)  # copy
+        optimizer["init_args"].update(kwargs)
+        optimizer = instantiate_class(model_parameters, optimizer)
+    return optimizer

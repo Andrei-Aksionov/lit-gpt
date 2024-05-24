@@ -1,13 +1,12 @@
 # Copyright Lightning AI. Licensed under the Apache License 2.0, see LICENSE file.
 
 import math
-import os
 import pprint
 import time
 from datetime import timedelta
 from functools import partial
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, Dict
 
 import lightning as L
 import torch
@@ -24,12 +23,14 @@ from litgpt.config import name_to_config
 from litgpt.data import DataModule, TinyLlama
 from litgpt.model import GPT, Block, CausalSelfAttention, Config, LLaMAMLP
 from litgpt.utils import (
-    CLI,
     CycleIterator,
     capture_hparams,
     choose_logger,
     chunked_cross_entropy,
     copy_config_files,
+    get_default_supported_precision,
+    init_out_dir,
+    instantiate_torch_optimizer,
     num_parameters,
     parse_devices,
     reset_parameters,
@@ -42,6 +43,7 @@ def setup(
     model_name: Optional[str] = None,
     model_config: Optional[Config] = None,
     out_dir: Path = Path("out/pretrain"),
+    precision: Literal["bf16-true", "bf16-mixed", "32-true", None] = None,
     initial_checkpoint_dir: Optional[Path] = None,
     resume: Union[bool, Path] = False,
     data: Optional[DataModule] = None,
@@ -51,16 +53,13 @@ def setup(
         global_batch_size=512,
         micro_batch_size=4,
         max_tokens=int(3e12),  # 3 trillion
-        learning_rate=4e-4,
-        weight_decay=1e-1,
-        beta1=0.9,
-        beta2=0.95,
         max_norm=1.0,
         min_lr=4e-5,
         lr_warmup_steps=2000,
         tie_embeddings=False,
     ),
     eval: EvalArgs = EvalArgs(interval=1000, max_iters=100),
+    optimizer: Union[str, Dict] = "AdamW",
     devices: Union[int, str] = "auto",
     tokenizer_dir: Optional[Path] = None,
     logger_name: Literal["wandb", "tensorboard", "csv"] = "tensorboard",
@@ -75,6 +74,7 @@ def setup(
             ``model_config``.
         out_dir: Directory in which to save checkpoints and logs. If running in a Lightning Studio Job, look for it in
             /teamspace/jobs/<job-name>/share.
+        precision: The precision to use for finetuning. Determines a compatible precision setting by default.
         initial_checkpoint_dir: Optional path to a checkpoint directory to initialize the model from.
             Useful for continued pretraining. Mutually exclusive with ``resume``.
         resume: Path to a checkpoint directory to resume from in case training was interrupted, or ``True`` to resume
@@ -82,6 +82,8 @@ def setup(
         data: Data-related arguments. If not provided, the default is ``litgpt.data.TinyLlama``.
         train: Training-related arguments. See ``litgpt.args.TrainArgs`` for details.
         eval: Evaluation-related arguments. See ``litgpt.args.EvalArgs`` for details.
+        optimizer: An optimizer name (such as "AdamW") or config.
+        
         devices: How many devices/GPUs to use. Uses all GPUs by default.
         tokenizer_dir: Optional path to the tokenizer dir that was used for preprocessing the dataset. Only some data
             module require this.
@@ -96,6 +98,7 @@ def setup(
         available_models = "\n".join(sorted(name_to_config))
         raise ValueError(f"Please specify --model_name <model_name>. Available values:\n{available_models}")
     config = Config.from_name(model_name) if model_config is None else model_config
+    precision = precision or get_default_supported_precision(training=True)
     devices = parse_devices(devices)
     out_dir = init_out_dir(out_dir)
     # in case the dataset requires the Tokenizer
@@ -109,7 +112,7 @@ def setup(
         strategy = FSDPStrategy(auto_wrap_policy={Block}, state_dict_type="full", sharding_strategy="HYBRID_SHARD")
     else:
         strategy = "auto"
-    fabric = L.Fabric(devices=devices, strategy=strategy, precision="bf16-mixed", loggers=[logger])
+    fabric = L.Fabric(devices=devices, strategy=strategy, precision=precision, loggers=[logger])
     fabric.launch()
 
     fabric.print(pprint.pformat(hparams))
@@ -129,6 +132,7 @@ def setup(
         tokenizer,
         train,
         eval,
+        optimizer,
     )
 
 
@@ -145,6 +149,7 @@ def main(
     tokenizer: Optional[Tokenizer],
     train: TrainArgs,
     eval: EvalArgs,
+    optimizer: Union[str, Dict],
 ) -> None:
     validate_args(train, eval, initial_checkpoint_dir, resume)
 
@@ -169,13 +174,9 @@ def main(
 
     model = torch.compile(model)
     model = fabric.setup(model)
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=train.learning_rate,
-        weight_decay=train.weight_decay,
-        betas=(train.beta1, train.beta2),
-        fused=True,
-    )
+
+    extra_kwargs = {"fused": fabric.device.type == "cuda"}
+    optimizer = instantiate_torch_optimizer(optimizer, model.parameters(), **extra_kwargs)
     optimizer = fabric.setup_optimizers(optimizer)
 
     train_dataloader, val_dataloader = get_dataloaders(fabric, data, tokenizer, train, model.max_seq_length)
@@ -223,7 +224,13 @@ def fit(
     model = state["model"]
     optimizer = state["optimizer"]
 
-    validate(fabric, model, val_dataloader, max_iters=2)  # sanity check
+    if eval.initial_validation:
+        val_loss = validate(fabric, model, val_dataloader, max_iters=eval.max_iters)
+        val_loss = f"{val_loss:.3f}"
+    else:
+        validate(fabric, model, val_dataloader, max_iters=2)   # sanity check
+        val_loss = "n/a"
+
     throughput = ThroughputMonitor(fabric, window_size=5)
 
     with torch.device("meta"):
@@ -247,7 +254,6 @@ def fit(
     )
     fabric.barrier()
     total_t0 = time.perf_counter()
-    val_loss = "n/a"
 
     warmup_iters = train.warmup_iters(devices, max_iters, train_dataloader)
 
@@ -256,7 +262,7 @@ def fit(
             break
 
         # determine and set the learning rate for this iteration
-        lr = get_lr(train.learning_rate, state["iter_num"], warmup_iters, max_iters, train.min_lr)
+        lr = get_lr(optimizer.param_groups[0]["lr"], state["iter_num"], warmup_iters, max_iters, train.min_lr)
         for param_group in optimizer.param_groups:
             param_group["lr"] = lr
 
@@ -404,12 +410,6 @@ def initialize_weights(fabric: L.Fabric, model: GPT, n_layer: int, n_embd: int) 
         reset_parameters(model)
 
 
-def init_out_dir(out_dir: Path) -> Path:
-    if not out_dir.is_absolute() and "LIGHTNING_ARTIFACTS_DIR" in os.environ:
-        return Path(os.getenv("LIGHTNING_ARTIFACTS_DIR")) / out_dir
-    return out_dir
-
-
 def save_checkpoint(fabric, state, tokenizer_dir, checkpoint_file):
     model = state["model"]
     checkpoint_file.parent.mkdir(parents=True, exist_ok=True)
@@ -438,9 +438,3 @@ def validate_args(train: TrainArgs, eval: EvalArgs, initial_checkpoint_dir, resu
         issues.append("Can't provide both `--resume` and `--initial_checkpoint_dir`. Choose one.")
     if issues:
         raise ValueError("\n".join(issues))
-
-
-if __name__ == "__main__":
-    torch.set_float32_matmul_precision("high")
-
-    CLI(setup)

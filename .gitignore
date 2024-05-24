@@ -17,4 +17,6 @@ out
 wandb
 events.out.tfevents*
 
-tests/reference_models
+# test artifacts from tests/test_readme.py
+tests/custom_finetuning_dataset.json
+tests/custom_texts
