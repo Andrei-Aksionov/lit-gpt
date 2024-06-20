@@ -3,6 +3,7 @@
 import os
 import platform
 import sys
+import warnings
 from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -102,10 +103,14 @@ def download_from_hub(
                 raise RuntimeError(f"{safetensor_path} is likely corrupted. Please try to re-download it.") from e
             print(f"{safetensor_path} --> {bin_path}")
             torch.save(result, bin_path)
-            # if sys.platform.startswith("win"):
-            #     os.chmod(safetensor_path, 0o0777)
-            safetensor_path.chmod(777)
-            os.remove(safetensor_path)
+            try:
+                os.remove(safetensor_path)
+            except PermissionError:
+                warnings.warn(
+                    f"The `{safetensor_path}` file was converted and is no longer needed. Due to a `PermissionError`"
+                    "it cannot be deleted by the code and the user has to do it manually in order to save disk space."
+                )
+
 
     if convert_checkpoint and not tokenizer_only:
         print("Converting checkpoint files to LitGPT format.")
