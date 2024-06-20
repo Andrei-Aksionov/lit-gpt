@@ -104,8 +104,9 @@ def download_from_hub(
                 raise RuntimeError(f"{safetensor_path} is likely corrupted. Please try to re-download it.") from e
             print(f"{safetensor_path} --> {bin_path}")
             torch.save(result, bin_path)
-            if sys.platform.startswith("win"):
-                os.chmod(safetensor_path, 0o0777)
+            # if sys.platform.startswith("win"):
+            #     os.chmod(safetensor_path, 0o0777)
+            safetensor_path.chmod(0o0777)
             os.remove(safetensor_path)
 
     if convert_checkpoint and not tokenizer_only:
