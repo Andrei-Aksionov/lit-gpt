@@ -1,6 +1,8 @@
 # Copyright Lightning AI. Licensed under the Apache License 2.0, see LICENSE file.
 
 import os
+import platform
+import sys
 from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -101,6 +103,8 @@ def download_from_hub(
                 raise RuntimeError(f"{safetensor_path} is likely corrupted. Please try to re-download it.") from e
             print(f"{safetensor_path} --> {bin_path}")
             torch.save(result, bin_path)
+            if platform.system() == "Windows":
+                os.chmod(safetensor_path, 0o600)
             os.remove(safetensor_path)
 
     if convert_checkpoint and not tokenizer_only:
