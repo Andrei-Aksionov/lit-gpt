@@ -104,7 +104,8 @@ def download_from_hub(
             print(f"{safetensor_path} --> {bin_path}")
             torch.save(result, bin_path)
             if platform.system() == "Windows":
-                os.chmod(safetensor_path, 0o600)
+                import stat
+                os.chmod(safetensor_path, stat.S_IWRITE)
             os.remove(safetensor_path)
 
     if convert_checkpoint and not tokenizer_only:
