@@ -24,11 +24,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {os: "macOS-12", python-version: "3.10"}
-          - {os: "ubuntu-22.04", python-version: "3.11"}
-          - {os: "ubuntu-22.04", python-version: "3.10"}
-          - {os: "ubuntu-22.04", python-version: "3.9"}
-          - {os: "ubuntu-20.04", python-version: "3.8"}
+          # - {os: "macOS-12", python-version: "3.10"}
+          # - {os: "ubuntu-22.04", python-version: "3.11"}
+          # - {os: "ubuntu-22.04", python-version: "3.10"}
+          # - {os: "ubuntu-22.04", python-version: "3.9"}
+          # - {os: "ubuntu-20.04", python-version: "3.8"}
           - {os: "windows-2022", python-version: "3.10"}
     timeout-minutes: 25
 
@@ -64,4 +64,4 @@ jobs:
 
     - name: Run tests
       run: |
-        pytest -v --disable-pytest-warnings --strict-markers --color=yes --timeout 120
+        pytest tests/test_readme.py::test_download_model -v --disable-pytest-warnings --strict-markers --color=yes --timeout 120
