@@ -53,10 +53,10 @@ def download_from_hub(
     from_safetensors = False
     if not tokenizer_only:
         bins, safetensors = find_weight_files(repo_id, access_token)
-        if bins:
-            # covers `.bin` files and `.bin.index.json`
-            download_files.append("*.bin*")
-        elif safetensors:
+        # if bins:
+        #     # covers `.bin` files and `.bin.index.json`
+        #     download_files.append("*.bin*")
+        if safetensors:
             if not _SAFETENSORS_AVAILABLE:
                 raise ModuleNotFoundError(str(_SAFETENSORS_AVAILABLE))
             download_files.append("*.safetensors*")
