@@ -96,6 +96,7 @@ def download_from_hub(
 
         print("Converting .safetensor files to PyTorch binaries (.bin)")
         for safetensor_path in directory.glob("*.safetensors"):
+            print(f"{safetensor_path=}")
             bin_path = safetensor_path.with_suffix(".bin")
             try:
                 result = safetensors_load(safetensor_path)
@@ -103,10 +104,11 @@ def download_from_hub(
                 raise RuntimeError(f"{safetensor_path} is likely corrupted. Please try to re-download it.") from e
             print(f"{safetensor_path} --> {bin_path}")
             torch.save(result, bin_path)
-            if platform.system() == "Windows":
-                import stat
-                os.chmod(safetensor_path, stat.S_IWRITE)
-            os.remove(safetensor_path)
+            # if platform.system() == "Windows":
+            #     import stat
+            #     os.chmod(safetensor_path, stat.S_IWRITE)
+            # os.remove(safetensor_path)
+            safetensor_path.unlink()
 
     if convert_checkpoint and not tokenizer_only:
         print("Converting checkpoint files to LitGPT format.")
@@ -150,3 +152,7 @@ def gated_repo_catcher(repo_id: str, access_token: Optional[str]):
                     f" visit https://huggingface.co/{repo_id} for more information."
                 ) from None
         raise e from None
+
+if __name__ == "__main__":
+    REPO_ID = Path("EleutherAI/pythia-14m")
+    download_from_hub(str(REPO_ID))
